@@ -18,7 +18,7 @@ const (
 	userAgent  = "Mozilla/5.0 (X11; Linux x86_64; rv:93.0) Gecko/20100101 Firefox/93.0"
 
 	dateInputFmt  = "2006 January 2 3:04 pm"
-	dateOutputFmt = "02.01.2006    15:04"
+	dateOutputFmt = "02.01.2006 15:04"
 )
 
 var (
@@ -54,7 +54,7 @@ func main() {
 		}
 		raw := strings.TrimSpace(datetime[0])
 		dateFormatted := reformatDate(raw)
-		fmt.Printf("%s\t", dateFormatted)
+		fmt.Printf("%s ", dateFormatted)
 		balls := toIntSlice(hs.Squeeze(node, ballsMatcher, hs.ExtractChildrenTexts))
 		if len(balls) != 7 {
 			continue
