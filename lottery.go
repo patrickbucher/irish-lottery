@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net/http"
@@ -26,12 +27,35 @@ var (
 	timePat = regexp.MustCompile(`([0-9]{1,2}):([0-9]{2})([ap]m)`)
 )
 
+type Draft struct {
+	Date      *time.Time
+	Balls     []int
+	ExtraBall int
+}
+
+func (d Draft) Format() string {
+	buf := bytes.NewBufferString("")
+	datetime := d.Date.Format(dateOutputFmt)
+	buf.WriteString(datetime)
+	buf.WriteRune(' ')
+	for _, ball := range d.Balls {
+		buf.WriteString(fmt.Sprintf("%2d ", ball))
+	}
+	buf.WriteString(fmt.Sprintf("Zz: %2d", d.ExtraBall))
+	return buf.String()
+}
+
 func main() {
 	doc, err := getDocument(lotteryURL, userAgent)
 	if err != nil {
 		log.Fatal(err)
 	}
+	for _, draft := range extractDrafts(doc) {
+		fmt.Println(draft.Format())
+	}
+}
 
+func extractDrafts(doc *html.Node) []Draft {
 	tableRowMatcher := [][]hs.Predicate{
 		[]hs.Predicate{hs.TagMatcher("tr")},
 	}
@@ -42,28 +66,28 @@ func main() {
 	ballsMatcher := [][]hs.Predicate{
 		[]hs.Predicate{hs.TagMatcher("td")},
 		[]hs.Predicate{hs.TagMatcher("ul")},
-		[]hs.Predicate{
-			hs.TagMatcher("li"),
-		},
+		[]hs.Predicate{hs.TagMatcher("li")},
 	}
 	nodes := hs.Apply(doc, tableRowMatcher)
+	drafts := make([]Draft, 0)
 	for _, node := range nodes {
 		datetime := hs.Squeeze(node, datetimeMatcher, hs.ExtractChildText)
 		if len(datetime) < 1 {
 			continue
 		}
 		raw := strings.TrimSpace(datetime[0])
-		dateFormatted := reformatDate(raw)
-		fmt.Printf("%s ", dateFormatted)
+		drawDate := parseDate(raw)
 		balls := toIntSlice(hs.Squeeze(node, ballsMatcher, hs.ExtractChildrenTexts))
 		if len(balls) != 7 {
 			continue
 		}
-		for _, ball := range balls[:6] {
-			fmt.Printf("%2d ", ball)
-		}
-		fmt.Printf("Zz: %2d\n", balls[6])
+		drafts = append(drafts, Draft{
+			Date:      drawDate,
+			Balls:     balls[:6],
+			ExtraBall: balls[6],
+		})
 	}
+	return drafts
 }
 
 func toIntSlice(values []string) []int {
@@ -77,7 +101,7 @@ func toIntSlice(values []string) []int {
 	return numbers
 }
 
-func reformatDate(rawDate string) string {
+func parseDate(rawDate string) *time.Time {
 	dateFields := datePat.FindStringSubmatch(rawDate)
 	timeFields := timePat.FindStringSubmatch(rawDate)
 	month := dateFields[1]
@@ -89,10 +113,9 @@ func reformatDate(rawDate string) string {
 	dateStr := fmt.Sprintf("%s %s %s %s:%s %s", year, month, day, hour, minute, phase)
 	parsed, err := time.Parse(dateInputFmt, dateStr)
 	if err != nil {
-		return ""
+		return nil
 	}
-	formatted := parsed.Format(dateOutputFmt)
-	return formatted
+	return &parsed
 }
 
 func getDocument(url, agent string) (*html.Node, error) {
